@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation'
 import { createClient, NHOM_HANG } from '@/lib/supabase'
 import TopBar from '@/components/TopBar'
 
+export const dynamic = 'force-dynamic'
+
 type Profile = { id: string; ho_ten: string; vai_tro: string }
 type Log = {
   id: number; sku: string; ten_sp: string; thao_tac: string

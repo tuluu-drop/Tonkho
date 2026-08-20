@@ -4,6 +4,8 @@ import { useRouter, useParams } from 'next/navigation'
 import { createClient, NHOM_HANG } from '@/lib/supabase'
 import TopBar from '@/components/TopBar'
 
+export const dynamic = 'force-dynamic'
+
 type Profile = { id: string; ho_ten: string; vai_tro: string }
 type Session = { id: string; nhom_hang: string; ten_phien: string; trang_thai: string }
 type Item = { id: string; sku: string; ten_sp: string; so_luong: number; ghi_chu: string | null; updated_at: string }

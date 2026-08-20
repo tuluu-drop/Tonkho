@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 export default function Login() {
   const [maNv, setMaNv] = useState('')
   const [pass, setPass] = useState('')
@@ -13,12 +15,19 @@ export default function Login() {
   async function handleLogin() {
     setErr(''); setLoading(true)
     const supabase = createClient()
-    // Mã NV được lưu dạng email nội bộ: {maNv}@mia.local
     const email = `${maNv.trim().toLowerCase()}@mia.local`
-    const { error } = await supabase.auth.signInWithPassword({ email, password: pass })
+    const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password: pass })
+    if (error) { setLoading(false); setErr('Mã NV hoặc mật khẩu không đúng.'); return }
+
+    // Kiểm tra có phải đổi mật khẩu lần đầu không
+    const { data: prof } = await supabase.from('profiles')
+      .select('phai_doi_mk').eq('id', authData.user.id).single()
     setLoading(false)
-    if (error) { setErr('Mã NV hoặc mật khẩu không đúng.'); return }
-    router.replace('/dashboard')
+    if (prof?.phai_doi_mk) {
+      router.replace('/doi-mat-khau')
+    } else {
+      router.replace('/dashboard')
+    }
   }
 
   return (

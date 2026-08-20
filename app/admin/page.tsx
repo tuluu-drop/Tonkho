@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase'
 import TopBar from '@/components/TopBar'
 import QRCode from 'qrcode'
 
+export const dynamic = 'force-dynamic'
+
 type Profile = { id: string; ma_nv: string; ho_ten: string; vai_tro: string; created_at: string }
 
 export default function Admin() {

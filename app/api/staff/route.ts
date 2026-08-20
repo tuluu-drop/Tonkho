@@ -45,6 +45,10 @@ export async function POST(req: NextRequest) {
     user_metadata: { ma_nv: String(ma_nv).trim(), ho_ten, vai_tro: vai_tro || 'staff' },
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  // Bắt buộc đổi mật khẩu ở lần đăng nhập đầu
+  if (data?.user?.id) {
+    await admin.from('profiles').update({ phai_doi_mk: true }).eq('id', data.user.id)
+  }
   return NextResponse.json({ data })
 }
 
