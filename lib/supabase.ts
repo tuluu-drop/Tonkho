@@ -7,10 +7,12 @@ export function createClient() {
   )
 }
 
-// Nhãn nhóm hàng dùng chung
+// Nhãn nhóm hàng dùng chung (6 nhóm)
 export const NHOM_HANG: Record<string, string> = {
   vali: 'Vali',
   balo: 'Balo',
+  tui_xach: 'Túi xách',
   phu_kien: 'Phụ kiện',
+  tre_em: 'Trẻ em',
   qua_tang: 'Quà tặng',
 }

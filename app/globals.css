@@ -47,8 +47,24 @@ tr:hover td { background: #fafbfc; }
 .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
 .tag.vali { background: #fee2e2; color: #b91c1c; }
 .tag.balo { background: #dbeafe; color: #1d4ed8; }
+.tag.tui_xach { background: #f3e8ff; color: #7e22ce; }
 .tag.phu_kien { background: #dcfce7; color: #15803d; }
+.tag.tre_em { background: #ffedd5; color: #c2410c; }
 .tag.qua_tang { background: #fef3c7; color: #b45309; }
+
+/* Autocomplete dropdown */
+.ac-wrap { position: relative; }
+.ac-list {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 20;
+  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  margin-top: 4px; max-height: 280px; overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,.1);
+}
+.ac-item { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #f1f3f5; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ac-item:last-child { border-bottom: none; }
+.ac-item:hover, .ac-item.active { background: #fef2f2; }
+.ac-item .ten { flex: 1; font-size: 14px; }
+.ac-empty { padding: 12px; color: var(--muted); font-size: 13px; text-align: center; }
 .tag.them { background: #dcfce7; color: #15803d; }
 .tag.sua_sl { background: #fef3c7; color: #b45309; }
 .tag.xoa { background: #fee2e2; color: #b91c1c; }

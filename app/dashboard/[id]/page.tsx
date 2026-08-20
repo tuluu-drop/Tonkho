@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient, NHOM_HANG } from '@/lib/supabase'
 import TopBar from '@/components/TopBar'
@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic'
 type Profile = { id: string; ho_ten: string; vai_tro: string }
 type Session = { id: string; nhom_hang: string; ten_phien: string; trang_thai: string }
 type Item = { id: string; sku: string; ten_sp: string; so_luong: number; ghi_chu: string | null; updated_at: string }
+type SanPham = { id: string; ten_sp: string; nhom_hang: string }
 
 export default function SessionDetail() {
   const router = useRouter()
@@ -20,11 +21,17 @@ export default function SessionDetail() {
   const [sess, setSess] = useState<Session | null>(null)
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
-  const [sku, setSku] = useState('')
-  const [tenSp, setTenSp] = useState('')
+  const [q, setQ] = useState('')
+
+  // Autocomplete
+  const [search, setSearch] = useState('')
+  const [goiY, setGoiY] = useState<SanPham[]>([])
+  const [chon, setChon] = useState<SanPham | null>(null)
   const [sl, setSl] = useState('')
   const [ghiChu, setGhiChu] = useState('')
-  const [q, setQ] = useState('')
+  const [showList, setShowList] = useState(false)
+  const [activeIdx, setActiveIdx] = useState(0)
+  const boxRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -42,17 +49,48 @@ export default function SessionDetail() {
 
   useEffect(() => { load() }, [load])
 
+  // Tìm gợi ý sản phẩm khi gõ
+  useEffect(() => {
+    if (search.trim().length < 1) { setGoiY([]); return }
+    let cancel = false
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from('san_pham')
+        .select('id,ten_sp,nhom_hang')
+        .ilike('ten_sp', `%${search.trim()}%`)
+        .eq('active', true)
+        .limit(20)
+      if (!cancel) { setGoiY(data || []); setActiveIdx(0) }
+    }, 200)
+    return () => { cancel = true; clearTimeout(t) }
+  }, [search, supabase])
+
+  // Đóng dropdown khi click ra ngoài
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setShowList(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
+
   const daDong = sess?.trang_thai === 'da_dong'
 
+  function chonSP(sp: SanPham) {
+    setChon(sp); setSearch(sp.ten_sp); setShowList(false)
+  }
+
   async function themSp() {
-    if (!sku.trim() || !tenSp.trim()) return
+    if (!chon) { alert('Vui lòng chọn sản phẩm từ gợi ý.'); return }
+    const soLuong = parseInt(sl) || 0
+    // Dùng tên SP làm cả sku (không cần mã riêng)
     const { error } = await supabase.from('inventory').insert({
-      session_id: sessionId, sku: sku.trim(), ten_sp: tenSp.trim(),
-      so_luong: parseInt(sl) || 0, ghi_chu: ghiChu.trim() || null,
-      updated_by: profile?.id,
+      session_id: sessionId, sku: chon.ten_sp, ten_sp: chon.ten_sp,
+      so_luong: soLuong, ghi_chu: ghiChu.trim() || null, updated_by: profile?.id,
     })
-    if (error) { alert('SKU đã tồn tại trong phiên hoặc lỗi: ' + error.message); return }
-    setSku(''); setTenSp(''); setSl(''); setGhiChu(''); load()
+    if (error) {
+      alert('SP này đã có trong phiên hoặc lỗi: ' + error.message); return
+    }
+    setChon(null); setSearch(''); setSl(''); setGhiChu(''); setGoiY([]); load()
   }
 
   async function suaSl(item: Item, moi: number) {
@@ -74,10 +112,16 @@ export default function SessionDetail() {
     load()
   }
 
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (!showList || goiY.length === 0) return
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i+1, goiY.length-1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(i => Math.max(i-1, 0)) }
+    else if (e.key === 'Enter') { e.preventDefault(); chonSP(goiY[activeIdx]) }
+  }
+
   if (loading) return <div className="center"><p className="muted">Đang tải…</p></div>
 
   const filtered = items.filter(i =>
-    i.sku.toLowerCase().includes(q.toLowerCase()) ||
     i.ten_sp.toLowerCase().includes(q.toLowerCase()))
   const tongSL = items.reduce((a, b) => a + b.so_luong, 0)
 
@@ -92,7 +136,7 @@ export default function SessionDetail() {
               <h1 style={{ marginTop: 8 }}>{sess?.ten_phien}</h1>
               <span className={`tag ${sess?.nhom_hang}`}>{NHOM_HANG[sess?.nhom_hang || '']}</span>
               <span className="muted" style={{ marginLeft: 12 }}>
-                {items.length} SKU · Tổng SL: <b>{tongSL}</b>
+                {items.length} SP · Tổng SL: <b>{tongSL}</b>
               </span>
             </div>
             <button className="ghost" onClick={doiTrangThai}>
@@ -103,15 +147,30 @@ export default function SessionDetail() {
 
         {!daDong && (
           <div className="card">
-            <h2>Thêm sản phẩm</h2>
+            <h2>Thêm sản phẩm kiểm kê</h2>
             <div className="row">
-              <div style={{ flex: '0 0 140px' }}>
-                <label>Mã SP (SKU)</label>
-                <input value={sku} onChange={e => setSku(e.target.value)} placeholder="VD: VL-2024-01" />
-              </div>
-              <div>
-                <label>Tên sản phẩm</label>
-                <input value={tenSp} onChange={e => setTenSp(e.target.value)} placeholder="Tên SP" />
+              <div ref={boxRef} className="ac-wrap" style={{ flex: 2 }}>
+                <label>Tìm sản phẩm (gõ vài ký tự)</label>
+                <input value={search}
+                  onChange={e => { setSearch(e.target.value); setChon(null); setShowList(true) }}
+                  onFocus={() => setShowList(true)}
+                  onKeyDown={onKeyDown}
+                  placeholder="VD: herschel, vali samsonite…" autoComplete="off" />
+                {showList && search.trim().length >= 1 && (
+                  <div className="ac-list">
+                    {goiY.length === 0 ? (
+                      <div className="ac-empty">Không tìm thấy sản phẩm phù hợp</div>
+                    ) : goiY.map((sp, idx) => (
+                      <div key={sp.id}
+                        className={`ac-item ${idx === activeIdx ? 'active' : ''}`}
+                        onMouseEnter={() => setActiveIdx(idx)}
+                        onClick={() => chonSP(sp)}>
+                        <span className="ten">{sp.ten_sp}</span>
+                        <span className={`tag ${sp.nhom_hang}`}>{NHOM_HANG[sp.nhom_hang]}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div style={{ flex: '0 0 100px' }}>
                 <label>Số lượng</label>
@@ -123,32 +182,34 @@ export default function SessionDetail() {
               </div>
               <div style={{ flex: '0 0 auto' }}>
                 <label>&nbsp;</label>
-                <button onClick={themSp}>+ Thêm</button>
+                <button onClick={themSp} disabled={!chon}>+ Thêm</button>
               </div>
             </div>
+            {chon && <p className="muted" style={{ marginTop: 8 }}>
+              Đã chọn: <b>{chon.ten_sp}</b> — nhập số lượng rồi bấm Thêm.
+            </p>}
           </div>
         )}
 
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h2 style={{ margin: 0 }}>Danh sách kiểm kê</h2>
+            <h2 style={{ margin: 0 }}>Danh sách đã kiểm kê</h2>
             <input style={{ maxWidth: 240 }} value={q} onChange={e => setQ(e.target.value)}
-              placeholder="🔍 Tìm SKU / tên SP" />
+              placeholder="🔍 Lọc trong danh sách" />
           </div>
           {filtered.length === 0 ? (
-            <p className="muted">Chưa có sản phẩm nào.</p>
+            <p className="muted">Chưa có sản phẩm nào. Dùng ô tìm kiếm ở trên để thêm.</p>
           ) : (
             <table>
               <thead>
                 <tr>
-                  <th>SKU</th><th>Tên SP</th><th>Số lượng</th><th>Ghi chú</th><th>Cập nhật</th>
+                  <th>Tên sản phẩm</th><th>Số lượng</th><th>Ghi chú</th><th>Cập nhật</th>
                   {!daDong && <th></th>}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(item => (
                   <tr key={item.id}>
-                    <td><b>{item.sku}</b></td>
                     <td>{item.ten_sp}</td>
                     <td>
                       {daDong ? item.so_luong : (

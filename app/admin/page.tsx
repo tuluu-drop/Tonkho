@@ -87,7 +87,10 @@ export default function Admin() {
       <TopBar hoTen={me?.ho_ten || ''} isAdmin />
       <div className="wrap">
         <div className="card">
-          <h1>Quản trị nhân viên</h1>
+          <h1>Quản trị</h1>
+          <div style={{ marginTop: 12 }}>
+            <a href="/admin/san-pham"><button className="ghost">📦 Quản lý danh mục sản phẩm</button></a>
+          </div>
         </div>
 
         <div className="card">
