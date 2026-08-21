@@ -65,6 +65,8 @@ tr:hover td { background: #fafbfc; }
 .ac-item:hover, .ac-item.active { background: #fef2f2; }
 .ac-item .ten { flex: 1; font-size: 14px; }
 .ac-empty { padding: 12px; color: var(--muted); font-size: 13px; text-align: center; }
+.admin-tile { cursor: pointer; transition: .15s; }
+.admin-tile:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); transform: translateY(-2px); }
 .tag.them { background: #dcfce7; color: #15803d; }
 .tag.sua_sl { background: #fef3c7; color: #b45309; }
 .tag.xoa { background: #fee2e2; color: #b91c1c; }

@@ -3,7 +3,6 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import TopBar from '@/components/TopBar'
-import QRCode from 'qrcode'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +23,6 @@ export default function Admin() {
   const [matKhau, setMatKhau] = useState('')
   const [vaiTro, setVaiTro] = useState('staff')
   const [msg, setMsg] = useState('')
-  const [qrUrl, setQrUrl] = useState('')
 
   // Đọc danh sách nhân viên THẲNG từ bảng profiles (chắc chắn hiện đủ)
   const fetchStaff = useCallback(async () => {
@@ -43,8 +41,6 @@ export default function Admin() {
     if (prof?.vai_tro !== 'admin') { router.replace('/dashboard'); return }
     setMe(prof)
     await fetchStaff()
-    const loginUrl = `${window.location.origin}/login`
-    setQrUrl(await QRCode.toDataURL(loginUrl, { width: 220, margin: 1 }))
     setLoading(false)
   }, [router, supabase, fetchStaff])
 
@@ -99,25 +95,33 @@ export default function Admin() {
     <>
       <TopBar hoTen={me?.ho_ten || ''} isAdmin />
       <div className="wrap">
-        <div className="card">
-          <h1>Quản trị</h1>
-          <div style={{ marginTop: 12 }}>
-            <a href="/admin/san-pham"><button className="ghost">📦 Quản lý danh mục sản phẩm</button></a>
-          </div>
+        <div className="card" style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-dark))', color: '#fff', border: 'none' }}>
+          <h1 style={{ color: '#fff', marginBottom: 4 }}>Trang Quản trị</h1>
+          <p style={{ color: 'rgba(255,255,255,.85)', fontSize: 14 }}>Quản lý nhân viên, sản phẩm, phân quyền và xem báo cáo tồn kho.</p>
         </div>
 
-        <div className="card">
-          <h2>QR đăng nhập cho nhân viên</h2>
-          <p className="muted">Nhân viên quét mã để mở trang đăng nhập trên điện thoại. In tờ QR đẹp (có hướng dẫn) để dán tại kho.</p>
-          {qrUrl && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginTop: 12, flexWrap: 'wrap' }}>
-              <img src={qrUrl} alt="QR đăng nhập" style={{ width: 130, height: 130, border: '1px solid var(--line)', borderRadius: 8, padding: 6, background: '#fff' }} />
-              <div>
-                <div className="muted" style={{ marginBottom: 8 }}>{typeof window !== 'undefined' ? `${window.location.origin}/login` : ''}</div>
-                <a href="/admin/qr"><button>🖨 Mở tờ QR để in</button></a>
-              </div>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
+          <a href="/admin/bao-cao" style={{ textDecoration: 'none' }}>
+            <div className="card admin-tile" style={{ margin: 0, borderTop: '3px solid #dc2626' }}>
+              <div style={{ fontSize: 28 }}>📊</div>
+              <div style={{ fontWeight: 700, color: 'var(--ink)', marginTop: 6 }}>Báo cáo chênh lệch</div>
+              <div className="muted" style={{ fontSize: 13 }}>Thống kê thiếu/dư theo nhóm hàng</div>
             </div>
-          )}
+          </a>
+          <a href="/admin/san-pham" style={{ textDecoration: 'none' }}>
+            <div className="card admin-tile" style={{ margin: 0, borderTop: '3px solid var(--brand)' }}>
+              <div style={{ fontSize: 28 }}>📦</div>
+              <div style={{ fontWeight: 700, color: 'var(--ink)', marginTop: 6 }}>Danh mục sản phẩm</div>
+              <div className="muted" style={{ fontSize: 13 }}>Thêm / xóa / phân nhóm sản phẩm</div>
+            </div>
+          </a>
+          <a href="/admin/qr" style={{ textDecoration: 'none' }}>
+            <div className="card admin-tile" style={{ margin: 0, borderTop: '3px solid #16a34a' }}>
+              <div style={{ fontSize: 28 }}>🔗</div>
+              <div style={{ fontWeight: 700, color: 'var(--ink)', marginTop: 6 }}>Mã QR đăng nhập</div>
+              <div className="muted" style={{ fontSize: 13 }}>In tờ QR dán tại kho</div>
+            </div>
+          </a>
         </div>
 
         <div className="card">

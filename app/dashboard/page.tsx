@@ -9,7 +9,8 @@ export const dynamic = 'force-dynamic'
 type Profile = { id: string; ho_ten: string; vai_tro: string; quyen_sua?: boolean }
 type SanPham = { id: string; ten_sp: string; nhom_hang: string }
 type TonKho = {
-  id: string; ten_sp: string; nhom_hang: string; so_luong: number
+  id: string; ten_sp: string; nhom_hang: string
+  ton_he_thong: number; ton_thuc_te: number; chenh_lech: number
   ghi_chu: string | null; ma_nv: string | null; ho_ten: string | null; updated_at: string
 }
 
@@ -22,11 +23,11 @@ export default function Dashboard() {
   const [q, setQ] = useState('')
   const [fNhom, setFNhom] = useState('')
 
-  // Autocomplete chọn SP
   const [search, setSearch] = useState('')
   const [goiY, setGoiY] = useState<SanPham[]>([])
   const [chon, setChon] = useState<SanPham | null>(null)
-  const [sl, setSl] = useState('')
+  const [tonHT, setTonHT] = useState('')
+  const [tonTT, setTonTT] = useState('')
   const [ghiChu, setGhiChu] = useState('')
   const [showList, setShowList] = useState(false)
   const [activeIdx, setActiveIdx] = useState(0)
@@ -55,7 +56,6 @@ export default function Dashboard() {
 
   useEffect(() => { load() }, [load])
 
-  // Tìm gợi ý SP
   useEffect(() => {
     if (search.trim().length < 1) { setGoiY([]); return }
     let cancel = false
@@ -78,56 +78,51 @@ export default function Dashboard() {
 
   function chonSP(sp: SanPham) {
     setChon(sp); setSearch(sp.ten_sp); setShowList(false); setWarning('')
-    // Kiểm tra SP đã được cập nhật chưa
     const daCo = items.find(i => i.ten_sp === sp.ten_sp)
     if (daCo) {
-      setWarning(`⚠️ "${sp.ten_sp}" đã được ${daCo.ho_ten || daCo.ma_nv || 'người khác'} cập nhật lúc ${new Date(daCo.updated_at).toLocaleString('vi-VN')} (SL: ${daCo.so_luong}). Không thể cập nhật lại. Liên hệ quản trị nếu cần sửa.`)
+      setWarning(`⚠️ "${sp.ten_sp}" đã được ${daCo.ho_ten || 'người khác'} cập nhật lúc ${new Date(daCo.updated_at).toLocaleString('vi-VN')}. Không thể cập nhật lại.`)
     }
   }
 
   async function luu() {
     if (!chon) return
     setWarning(''); setSaving(true)
-    // Kiểm tra lại lần cuối (phòng người khác vừa nhập)
     const { data: existing } = await supabase.from('ton_kho')
       .select('*').eq('ten_sp', chon.ten_sp).maybeSingle()
     if (existing) {
       setSaving(false)
-      setWarning(`⚠️ "${chon.ten_sp}" đã được ${existing.ho_ten || existing.ma_nv || 'người khác'} cập nhật lúc ${new Date(existing.updated_at).toLocaleString('vi-VN')} (SL: ${existing.so_luong}). Không thể cập nhật lại.`)
-      taiTonKho()
-      return
+      setWarning(`⚠️ "${chon.ten_sp}" đã được ${existing.ho_ten || 'người khác'} cập nhật lúc ${new Date(existing.updated_at).toLocaleString('vi-VN')}. Không thể cập nhật lại.`)
+      taiTonKho(); return
     }
     const { error } = await supabase.from('ton_kho').insert({
       ten_sp: chon.ten_sp, nhom_hang: chon.nhom_hang,
-      so_luong: parseInt(sl) || 0, ghi_chu: ghiChu.trim() || null,
-      updated_by: profile?.id, ma_nv: null, ho_ten: profile?.ho_ten,
+      ton_he_thong: parseInt(tonHT) || 0, ton_thuc_te: parseInt(tonTT) || 0,
+      ghi_chu: ghiChu.trim() || null, updated_by: profile?.id, ho_ten: profile?.ho_ten,
     })
     setSaving(false)
     if (error) {
       if (error.message.includes('duplicate')) {
-        setWarning(`⚠️ "${chon.ten_sp}" vừa được người khác cập nhật. Không thể ghi đè.`)
-        taiTonKho()
+        setWarning(`⚠️ "${chon.ten_sp}" vừa được người khác cập nhật.`); taiTonKho()
       } else setWarning('Lỗi: ' + error.message)
       return
     }
-    setChon(null); setSearch(''); setSl(''); setGhiChu(''); setGoiY([]); taiTonKho()
+    setChon(null); setSearch(''); setTonHT(''); setTonTT(''); setGhiChu(''); setGoiY([]); taiTonKho()
   }
 
-  // Admin: sửa số lượng
-  async function suaSl(item: TonKho, moi: number) {
+  async function suaTon(item: TonKho, field: 'ton_he_thong' | 'ton_thuc_te', val: number) {
     if (!coTheSua) return
     await supabase.from('ton_kho').update({
-      so_luong: moi, updated_by: profile?.id, ho_ten: profile?.ho_ten,
+      [field]: val, updated_by: profile?.id, ho_ten: profile?.ho_ten,
       updated_at: new Date().toISOString(),
     }).eq('id', item.id)
     taiTonKho()
   }
 
-  // Admin: xóa
   async function xoa(item: TonKho) {
     if (!coTheSua) return
-    if (!confirm(`Xóa "${item.ten_sp}" khỏi tồn kho? (để nhân viên cập nhật lại)`)) return
-    await supabase.from('ton_kho').delete().eq('id', item.id)
+    if (!confirm(`Xóa "${item.ten_sp}"? (để nhân viên cập nhật lại)`)) return
+    const { error } = await supabase.from('ton_kho').delete().eq('id', item.id)
+    if (error) alert('Không xóa được: ' + error.message)
     taiTonKho()
   }
 
@@ -143,7 +138,17 @@ export default function Dashboard() {
   const filtered = items.filter(i =>
     i.ten_sp.toLowerCase().includes(q.toLowerCase()) &&
     (!fNhom || i.nhom_hang === fNhom))
-  const tongSL = items.reduce((a, b) => a + b.so_luong, 0)
+
+  // Thống kê nhanh
+  const soThieu = items.filter(i => i.chenh_lech > 0).length  // hệ thống > thực tế = thiếu
+  const soDu = items.filter(i => i.chenh_lech < 0).length
+
+  function ChenhLech({ v }: { v: number }) {
+    if (v === 0) return <span className="muted">0</span>
+    // chenh_lech = ton_he_thong - ton_thuc_te. Dương = thiếu; Âm = dư
+    if (v > 0) return <span style={{ color: '#dc2626', fontWeight: 700 }}>−{v} (thiếu)</span>
+    return <span style={{ color: '#16a34a', fontWeight: 700 }}>+{Math.abs(v)} (dư)</span>
+  }
 
   return (
     <>
@@ -151,116 +156,122 @@ export default function Dashboard() {
       <div className="wrap">
         <div className="card">
           <h1>Cập nhật tồn kho</h1>
-          <p className="muted">Chọn sản phẩm thiếu → nhập số lượng → lưu. Mỗi sản phẩm chỉ cập nhật <b>một lần</b>.</p>
+          <p className="muted">Chọn sản phẩm → nhập tồn hệ thống & tồn thực tế → lưu. Hệ thống tự tính chênh lệch. Mỗi SP chỉ cập nhật <b>một lần</b>.</p>
         </div>
 
         <div className="card">
           <h2>Chọn sản phẩm cần cập nhật</h2>
+          <div className="ac-wrap" ref={boxRef} style={{ marginBottom: 12 }}>
+            <label>Tìm sản phẩm (gõ vài ký tự)</label>
+            <input value={search}
+              onChange={e => { setSearch(e.target.value); setChon(null); setShowList(true); setWarning('') }}
+              onFocus={() => setShowList(true)} onKeyDown={onKeyDown}
+              placeholder="VD: herschel, samsonite…" autoComplete="off" />
+            {showList && search.trim().length >= 1 && (
+              <div className="ac-list">
+                {goiY.length === 0 ? <div className="ac-empty">Không tìm thấy sản phẩm</div>
+                : goiY.map((sp, idx) => {
+                  const daCo = items.some(i => i.ten_sp === sp.ten_sp)
+                  return (
+                    <div key={sp.id} className={`ac-item ${idx === activeIdx ? 'active' : ''}`}
+                      onMouseEnter={() => setActiveIdx(idx)} onClick={() => chonSP(sp)}>
+                      <span className="ten">{sp.ten_sp}
+                        {daCo && <span style={{ color: 'var(--warn)', fontSize: 12, marginLeft: 6 }}>• đã cập nhật</span>}
+                      </span>
+                      <span className={`tag ${sp.nhom_hang}`}>{NHOM_HANG[sp.nhom_hang]}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
           <div className="row">
-            <div ref={boxRef} className="ac-wrap" style={{ flex: 2 }}>
-              <label>Tìm sản phẩm (gõ vài ký tự)</label>
-              <input value={search}
-                onChange={e => { setSearch(e.target.value); setChon(null); setShowList(true); setWarning('') }}
-                onFocus={() => setShowList(true)}
-                onKeyDown={onKeyDown}
-                placeholder="VD: herschel, samsonite…" autoComplete="off" />
-              {showList && search.trim().length >= 1 && (
-                <div className="ac-list">
-                  {goiY.length === 0 ? (
-                    <div className="ac-empty">Không tìm thấy sản phẩm</div>
-                  ) : goiY.map((sp, idx) => {
-                    const daCo = items.some(i => i.ten_sp === sp.ten_sp)
-                    return (
-                      <div key={sp.id}
-                        className={`ac-item ${idx === activeIdx ? 'active' : ''}`}
-                        onMouseEnter={() => setActiveIdx(idx)}
-                        onClick={() => chonSP(sp)}>
-                        <span className="ten">
-                          {sp.ten_sp}
-                          {daCo && <span style={{ color: 'var(--warn)', fontSize: 12, marginLeft: 6 }}>• đã cập nhật</span>}
-                        </span>
-                        <span className={`tag ${sp.nhom_hang}`}>{NHOM_HANG[sp.nhom_hang]}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+            <div style={{ flex: '0 0 130px' }}>
+              <label>Tồn hệ thống</label>
+              <input type="number" value={tonHT} onChange={e => setTonHT(e.target.value)} placeholder="0" disabled={!!warning} />
             </div>
-            <div style={{ flex: '0 0 110px' }}>
-              <label>Số lượng thiếu</label>
-              <input type="number" value={sl} onChange={e => setSl(e.target.value)}
-                placeholder="0" disabled={!!warning} />
+            <div style={{ flex: '0 0 130px' }}>
+              <label>Tồn thực tế</label>
+              <input type="number" value={tonTT} onChange={e => setTonTT(e.target.value)} placeholder="0" disabled={!!warning} />
+            </div>
+            <div style={{ flex: '0 0 150px' }}>
+              <label>Chênh lệch</label>
+              <div style={{ padding: '10px 12px', border: '1px dashed var(--line)', borderRadius: 8, background: '#fafbfc' }}>
+                {(() => {
+                  const cl = (parseInt(tonHT) || 0) - (parseInt(tonTT) || 0)
+                  if (cl === 0) return <span className="muted">0</span>
+                  if (cl > 0) return <span style={{ color: '#dc2626', fontWeight: 700 }}>−{cl} thiếu</span>
+                  return <span style={{ color: '#16a34a', fontWeight: 700 }}>+{Math.abs(cl)} dư</span>
+                })()}
+              </div>
             </div>
             <div>
               <label>Ghi chú</label>
-              <input value={ghiChu} onChange={e => setGhiChu(e.target.value)}
-                placeholder="(tùy chọn)" disabled={!!warning} />
+              <input value={ghiChu} onChange={e => setGhiChu(e.target.value)} placeholder="(tùy chọn)" disabled={!!warning} />
             </div>
             <div style={{ flex: '0 0 auto' }}>
               <label>&nbsp;</label>
-              <button onClick={luu} disabled={!chon || !!warning || saving}>
-                {saving ? 'Đang lưu…' : '✓ Lưu'}
-              </button>
+              <button onClick={luu} disabled={!chon || !!warning || saving}>{saving ? 'Đang lưu…' : '✓ Lưu'}</button>
             </div>
           </div>
           {warning && (
-            <div style={{ marginTop: 12, padding: '10px 14px', background: '#fef3c7',
-              border: '1px solid #fcd34d', borderRadius: 8, color: '#92400e', fontSize: 14 }}>
+            <div style={{ marginTop: 12, padding: '10px 14px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 8, color: '#92400e', fontSize: 14 }}>
               {warning}
             </div>
           )}
-          {chon && !warning && (
-            <p className="muted" style={{ marginTop: 8 }}>
-              Đã chọn: <b>{chon.ten_sp}</b> — nhập số lượng rồi bấm Lưu.
-            </p>
-          )}
+          {chon && !warning && <p className="muted" style={{ marginTop: 8 }}>Đã chọn: <b>{chon.ten_sp}</b></p>}
         </div>
 
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-            <h2 style={{ margin: 0 }}>Đã cập nhật ({items.length} SP · Tổng: {tongSL})</h2>
+            <h2 style={{ margin: 0 }}>
+              Đã cập nhật ({items.length} SP)
+              <span style={{ fontSize: 13, fontWeight: 400, marginLeft: 10 }}>
+                <span style={{ color: '#dc2626' }}>● {soThieu} thiếu</span>{'  '}
+                <span style={{ color: '#16a34a' }}>● {soDu} dư</span>
+              </span>
+            </h2>
             <div style={{ display: 'flex', gap: 8 }}>
               <select value={fNhom} onChange={e => setFNhom(e.target.value)} style={{ width: 150 }}>
                 <option value="">— Tất cả nhóm —</option>
                 {Object.entries(NHOM_HANG).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
-              <input style={{ width: 200 }} value={q} onChange={e => setQ(e.target.value)}
-                placeholder="🔍 Lọc theo tên" />
+              <input style={{ width: 200 }} value={q} onChange={e => setQ(e.target.value)} placeholder="🔍 Lọc theo tên" />
             </div>
           </div>
-          {filtered.length === 0 ? (
-            <p className="muted">Chưa có sản phẩm nào được cập nhật.</p>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Tên sản phẩm</th><th>Nhóm</th><th>SL</th><th>Người cập nhật</th><th>Thời gian</th>
-                  {coTheSua && <th></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(item => (
-                  <tr key={item.id}>
-                    <td>{item.ten_sp}</td>
-                    <td><span className={`tag ${item.nhom_hang}`}>{NHOM_HANG[item.nhom_hang]}</span></td>
-                    <td>
-                      {coTheSua ? (
-                        <input type="number" defaultValue={item.so_luong} style={{ width: 70 }}
-                          onBlur={e => {
-                            const v = parseInt(e.target.value)
-                            if (!isNaN(v) && v !== item.so_luong) suaSl(item, v)
-                          }} />
-                      ) : <b>{item.so_luong}</b>}
-                    </td>
-                    <td>{item.ho_ten || item.ma_nv || '—'}</td>
-                    <td className="muted">{new Date(item.updated_at).toLocaleString('vi-VN')}</td>
-                    {coTheSua && (
-                      <td><button className="sm danger" onClick={() => xoa(item)}>Xóa</button></td>
-                    )}
+          {filtered.length === 0 ? <p className="muted">Chưa có sản phẩm nào được cập nhật.</p> : (
+            <div style={{ overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Tên sản phẩm</th><th>Nhóm</th>
+                    <th>Tồn HT</th><th>Tồn TT</th><th>Chênh lệch</th>
+                    <th>Người cập nhật</th><th>Thời gian</th>
+                    {coTheSua && <th></th>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filtered.map(item => (
+                    <tr key={item.id}>
+                      <td>{item.ten_sp}</td>
+                      <td><span className={`tag ${item.nhom_hang}`}>{NHOM_HANG[item.nhom_hang]}</span></td>
+                      <td>{coTheSua ? (
+                        <input type="number" defaultValue={item.ton_he_thong} style={{ width: 64 }}
+                          onBlur={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v !== item.ton_he_thong) suaTon(item, 'ton_he_thong', v) }} />
+                      ) : item.ton_he_thong}</td>
+                      <td>{coTheSua ? (
+                        <input type="number" defaultValue={item.ton_thuc_te} style={{ width: 64 }}
+                          onBlur={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v !== item.ton_thuc_te) suaTon(item, 'ton_thuc_te', v) }} />
+                      ) : item.ton_thuc_te}</td>
+                      <td><ChenhLech v={item.chenh_lech} /></td>
+                      <td>{item.ho_ten || '—'}</td>
+                      <td className="muted">{new Date(item.updated_at).toLocaleString('vi-VN')}</td>
+                      {coTheSua && <td><button className="sm danger" onClick={() => xoa(item)}>Xóa</button></td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
