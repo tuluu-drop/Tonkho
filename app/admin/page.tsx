@@ -94,13 +94,15 @@ export default function Admin() {
         </div>
 
         <div className="card">
-          <h2>QR đăng nhập chung</h2>
-          <p className="muted">In mã này dán tại kho. Nhân viên quét → mở trang đăng nhập, nhập Mã NV + mật khẩu riêng.</p>
+          <h2>QR đăng nhập cho nhân viên</h2>
+          <p className="muted">Nhân viên quét mã để mở trang đăng nhập trên điện thoại. In tờ QR đẹp (có hướng dẫn) để dán tại kho.</p>
           {qrUrl && (
-            <div style={{ textAlign: 'center', marginTop: 12 }}>
-              <img src={qrUrl} alt="QR đăng nhập" style={{ border: '1px solid var(--line)', borderRadius: 8, padding: 8, background: '#fff' }} />
-              <div className="muted" style={{ marginTop: 8 }}>{typeof window !== 'undefined' ? `${window.location.origin}/login` : ''}</div>
-              <button className="ghost sm" style={{ marginTop: 8 }} onClick={() => window.print()}>🖨 In QR</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginTop: 12, flexWrap: 'wrap' }}>
+              <img src={qrUrl} alt="QR đăng nhập" style={{ width: 130, height: 130, border: '1px solid var(--line)', borderRadius: 8, padding: 6, background: '#fff' }} />
+              <div>
+                <div className="muted" style={{ marginBottom: 8 }}>{typeof window !== 'undefined' ? `${window.location.origin}/login` : ''}</div>
+                <a href="/admin/qr"><button>🖨 Mở tờ QR để in</button></a>
+              </div>
             </div>
           )}
         </div>
