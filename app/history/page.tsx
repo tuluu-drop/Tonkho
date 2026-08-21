@@ -8,35 +8,29 @@ export const dynamic = 'force-dynamic'
 
 type Profile = { id: string; ho_ten: string; vai_tro: string }
 type Log = {
-  id: number; sku: string; ten_sp: string; thao_tac: string
-  sl_cu: number | null; sl_moi: number | null; ma_nv: string; ho_ten: string
-  created_at: string; session_id: string
+  id: number; ten_sp: string; nhom_hang: string | null; thao_tac: string
+  so_luong: number | null; ma_nv: string | null; ho_ten: string | null; created_at: string
 }
-type Sess = { id: string; ten_phien: string; nhom_hang: string }
 
-const TT: Record<string, string> = { them: 'Thêm mới', sua_sl: 'Sửa SL', xoa: 'Xóa' }
+const TT: Record<string, string> = { cap_nhat: 'Cập nhật', sua: 'Sửa (admin)', xoa: 'Xóa (admin)' }
 
 export default function History() {
   const router = useRouter()
   const supabase = createClient()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [logs, setLogs] = useState<Log[]>([])
-  const [sessMap, setSessMap] = useState<Record<string, Sess>>({})
   const [loading, setLoading] = useState(true)
-  const [fSession, setFSession] = useState('')
   const [fUser, setFUser] = useState('')
+  const [q, setQ] = useState('')
 
   const load = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { router.replace('/login'); return }
     const { data: prof } = await supabase.from('profiles')
-      .select('id,ho_ten,vai_tro').eq('id', session.user.id).single()
+      .select('id,ho_ten,vai_tro,phai_doi_mk').eq('id', session.user.id).single()
+    if (prof?.phai_doi_mk) { router.replace('/doi-mat-khau'); return }
     setProfile(prof)
-    const { data: sess } = await supabase.from('sessions').select('id,ten_phien,nhom_hang')
-    const map: Record<string, Sess> = {}
-    ;(sess || []).forEach(s => { map[s.id] = s })
-    setSessMap(map)
-    const { data: lg } = await supabase.from('audit_log')
+    const { data: lg } = await supabase.from('lich_su')
       .select('*').order('created_at', { ascending: false }).limit(500)
     setLogs(lg || [])
     setLoading(false)
@@ -46,34 +40,29 @@ export default function History() {
 
   if (loading) return <div className="center"><p className="muted">Đang tải…</p></div>
 
-  const users = Array.from(new Set(logs.map(l => l.ho_ten))).filter(Boolean)
+  const users = Array.from(new Set(logs.map(l => l.ho_ten).filter(Boolean))) as string[]
   const filtered = logs.filter(l =>
-    (!fSession || l.session_id === fSession) &&
-    (!fUser || l.ho_ten === fUser))
+    (!fUser || l.ho_ten === fUser) &&
+    (!q || l.ten_sp.toLowerCase().includes(q.toLowerCase())))
 
   return (
     <>
       <TopBar hoTen={profile?.ho_ten || ''} isAdmin={profile?.vai_tro === 'admin'} />
       <div className="wrap">
         <div className="card">
-          <h1>Lịch sử nhập liệu</h1>
-          <p className="muted">Toàn bộ thao tác thêm / sửa / xóa — ai làm, khi nào.</p>
+          <h1>Lịch sử cập nhật</h1>
+          <p className="muted">Toàn bộ thao tác — ai cập nhật sản phẩm nào, số lượng bao nhiêu, lúc nào.</p>
           <div className="row" style={{ marginTop: 12 }}>
-            <div>
-              <label>Lọc theo phiên</label>
-              <select value={fSession} onChange={e => setFSession(e.target.value)}>
-                <option value="">— Tất cả phiên —</option>
-                {Object.values(sessMap).map(s => (
-                  <option key={s.id} value={s.id}>{s.ten_phien}</option>
-                ))}
-              </select>
-            </div>
             <div>
               <label>Lọc theo nhân viên</label>
               <select value={fUser} onChange={e => setFUser(e.target.value)}>
                 <option value="">— Tất cả nhân viên —</option>
                 {users.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
+            </div>
+            <div>
+              <label>Tìm sản phẩm</label>
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="🔍 Tên sản phẩm" />
             </div>
           </div>
         </div>
@@ -82,28 +71,19 @@ export default function History() {
           <table>
             <thead>
               <tr>
-                <th>Thời gian</th><th>Nhân viên</th><th>Phiên</th>
-                <th>Thao tác</th><th>SKU</th><th>Tên SP</th><th>SL</th>
+                <th>Thời gian</th><th>Nhân viên</th><th>Thao tác</th>
+                <th>Sản phẩm</th><th>Nhóm</th><th>SL</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(l => (
                 <tr key={l.id}>
                   <td className="muted">{new Date(l.created_at).toLocaleString('vi-VN')}</td>
-                  <td><b>{l.ho_ten}</b><br /><span className="muted">{l.ma_nv}</span></td>
-                  <td>
-                    {sessMap[l.session_id]
-                      ? <span className={`tag ${sessMap[l.session_id].nhom_hang}`}>{sessMap[l.session_id].ten_phien}</span>
-                      : '—'}
-                  </td>
-                  <td><span className={`tag ${l.thao_tac}`}>{TT[l.thao_tac]}</span></td>
-                  <td>{l.sku}</td>
+                  <td><b>{l.ho_ten || l.ma_nv || '—'}</b></td>
+                  <td><span className={`tag ${l.thao_tac === 'cap_nhat' ? 'them' : l.thao_tac === 'sua' ? 'sua_sl' : 'xoa'}`}>{TT[l.thao_tac]}</span></td>
                   <td>{l.ten_sp}</td>
-                  <td>
-                    {l.thao_tac === 'sua_sl'
-                      ? <span>{l.sl_cu} → <b>{l.sl_moi}</b></span>
-                      : l.thao_tac === 'them' ? <b>{l.sl_moi}</b> : <s>{l.sl_cu}</s>}
-                  </td>
+                  <td>{l.nhom_hang ? <span className={`tag ${l.nhom_hang}`}>{NHOM_HANG[l.nhom_hang]}</span> : '—'}</td>
+                  <td><b>{l.so_luong ?? '—'}</b></td>
                 </tr>
               ))}
             </tbody>
