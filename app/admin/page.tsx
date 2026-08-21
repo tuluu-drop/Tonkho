@@ -7,7 +7,10 @@ import QRCode from 'qrcode'
 
 export const dynamic = 'force-dynamic'
 
-type Profile = { id: string; ma_nv: string; ho_ten: string; vai_tro: string; created_at: string }
+type Profile = {
+  id: string; ma_nv: string; ho_ten: string; vai_tro: string
+  quyen_sua: boolean; created_at: string
+}
 
 export default function Admin() {
   const router = useRouter()
@@ -23,11 +26,13 @@ export default function Admin() {
   const [msg, setMsg] = useState('')
   const [qrUrl, setQrUrl] = useState('')
 
-  const fetchStaff = useCallback(async (tk: string) => {
-    const res = await fetch('/api/staff', { headers: { authorization: `Bearer ${tk}` } })
-    const j = await res.json()
-    if (res.ok) setStaff(j.data || [])
-  }, [])
+  // Đọc danh sách nhân viên THẲNG từ bảng profiles (chắc chắn hiện đủ)
+  const fetchStaff = useCallback(async () => {
+    const { data } = await supabase.from('profiles')
+      .select('id,ma_nv,ho_ten,vai_tro,quyen_sua,created_at')
+      .order('ma_nv')
+    setStaff(data || [])
+  }, [supabase])
 
   const load = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -37,8 +42,7 @@ export default function Admin() {
       .select('*').eq('id', session.user.id).single()
     if (prof?.vai_tro !== 'admin') { router.replace('/dashboard'); return }
     setMe(prof)
-    await fetchStaff(session.access_token)
-    // Tạo QR trỏ về trang login (QR chung)
+    await fetchStaff()
     const loginUrl = `${window.location.origin}/login`
     setQrUrl(await QRCode.toDataURL(loginUrl, { width: 220, margin: 1 }))
     setLoading(false)
@@ -56,7 +60,7 @@ export default function Admin() {
     const j = await res.json()
     if (!res.ok) { setMsg('Lỗi: ' + j.error); return }
     setMaNv(''); setHoTen(''); setMatKhau(''); setVaiTro('staff'); setMsg('✓ Đã tạo nhân viên')
-    fetchStaff(token)
+    fetchStaff()
   }
 
   async function xoaNv(id: string, ten: string) {
@@ -66,7 +70,7 @@ export default function Admin() {
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
       body: JSON.stringify({ id }),
     })
-    fetchStaff(token)
+    fetchStaff()
   }
 
   async function resetPass(id: string, ten: string) {
@@ -78,6 +82,15 @@ export default function Admin() {
       body: JSON.stringify({ id, mat_khau: mk }),
     })
     alert(res.ok ? '✓ Đã đổi mật khẩu' : '✗ Lỗi')
+  }
+
+  // Bật/tắt quyền sửa-xóa cho 1 nhân viên
+  async function doiQuyen(sp: Profile) {
+    const moi = !sp.quyen_sua
+    const { error } = await supabase.from('profiles')
+      .update({ quyen_sua: moi }).eq('id', sp.id)
+    if (error) { alert('Lỗi: ' + error.message); return }
+    fetchStaff()
   }
 
   if (loading) return <div className="center"><p className="muted">Đang tải…</p></div>
@@ -110,7 +123,7 @@ export default function Admin() {
         <div className="card">
           <h2>Thêm nhân viên</h2>
           <div className="row">
-            <div><label>Mã NV</label><input value={maNv} onChange={e => setMaNv(e.target.value)} placeholder="NV001" /></div>
+            <div><label>Mã NV</label><input value={maNv} onChange={e => setMaNv(e.target.value)} placeholder="NV013" /></div>
             <div><label>Họ tên</label><input value={hoTen} onChange={e => setHoTen(e.target.value)} placeholder="Nguyễn Văn A" /></div>
             <div><label>Mật khẩu</label><input value={matKhau} onChange={e => setMatKhau(e.target.value)} placeholder="≥ 6 ký tự" /></div>
             <div style={{ flex: '0 0 130px' }}>
@@ -127,15 +140,31 @@ export default function Admin() {
 
         <div className="card">
           <h2>Danh sách nhân viên ({staff.length})</h2>
+          <p className="muted" style={{ marginBottom: 12 }}>
+            Cột <b>Quyền sửa/xóa</b>: bật để cho nhân viên đó được sửa số lượng và xóa dữ liệu tồn kho (như admin). Mặc định nhân viên chỉ được thêm mới.
+          </p>
           <table>
-            <thead><tr><th>Mã NV</th><th>Họ tên</th><th>Vai trò</th><th>Ngày tạo</th><th></th></tr></thead>
+            <thead><tr>
+              <th>Mã NV</th><th>Họ tên</th><th>Vai trò</th><th>Quyền sửa/xóa</th><th></th>
+            </tr></thead>
             <tbody>
               {staff.map(s => (
                 <tr key={s.id}>
                   <td><b>{s.ma_nv}</b></td>
                   <td>{s.ho_ten}</td>
                   <td>{s.vai_tro === 'admin' ? '🛡 Quản trị' : 'Nhân viên'}</td>
-                  <td className="muted">{new Date(s.created_at).toLocaleDateString('vi-VN')}</td>
+                  <td>
+                    {s.vai_tro === 'admin' ? (
+                      <span className="tag them">Toàn quyền</span>
+                    ) : (
+                      <button
+                        className={`sm ${s.quyen_sua ? '' : 'ghost'}`}
+                        onClick={() => doiQuyen(s)}
+                        style={s.quyen_sua ? { background: 'var(--ok)' } : {}}>
+                        {s.quyen_sua ? '✓ Đã cấp quyền' : 'Cấp quyền'}
+                      </button>
+                    )}
+                  </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <button className="sm ghost" onClick={() => resetPass(s.id, s.ho_ten)}>Đổi MK</button>{' '}
                     {s.id !== me?.id && <button className="sm danger" onClick={() => xoaNv(s.id, s.ho_ten)}>Xóa</button>}

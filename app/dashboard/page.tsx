@@ -6,7 +6,7 @@ import TopBar from '@/components/TopBar'
 
 export const dynamic = 'force-dynamic'
 
-type Profile = { id: string; ho_ten: string; vai_tro: string }
+type Profile = { id: string; ho_ten: string; vai_tro: string; quyen_sua?: boolean }
 type SanPham = { id: string; ten_sp: string; nhom_hang: string }
 type TonKho = {
   id: string; ten_sp: string; nhom_hang: string; so_luong: number
@@ -35,6 +35,7 @@ export default function Dashboard() {
   const boxRef = useRef<HTMLDivElement>(null)
 
   const isAdmin = profile?.vai_tro === 'admin'
+  const coTheSua = profile?.vai_tro === 'admin' || profile?.quyen_sua === true
 
   const taiTonKho = useCallback(async () => {
     const { data } = await supabase.from('ton_kho').select('*').order('updated_at', { ascending: false })
@@ -45,7 +46,7 @@ export default function Dashboard() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { router.replace('/login'); return }
     const { data: prof } = await supabase.from('profiles')
-      .select('id,ho_ten,vai_tro,phai_doi_mk').eq('id', session.user.id).single()
+      .select('id,ho_ten,vai_tro,phai_doi_mk,quyen_sua').eq('id', session.user.id).single()
     if (prof?.phai_doi_mk) { router.replace('/doi-mat-khau'); return }
     setProfile(prof)
     await taiTonKho()
@@ -114,7 +115,7 @@ export default function Dashboard() {
 
   // Admin: sửa số lượng
   async function suaSl(item: TonKho, moi: number) {
-    if (!isAdmin) return
+    if (!coTheSua) return
     await supabase.from('ton_kho').update({
       so_luong: moi, updated_by: profile?.id, ho_ten: profile?.ho_ten,
       updated_at: new Date().toISOString(),
@@ -124,7 +125,7 @@ export default function Dashboard() {
 
   // Admin: xóa
   async function xoa(item: TonKho) {
-    if (!isAdmin) return
+    if (!coTheSua) return
     if (!confirm(`Xóa "${item.ten_sp}" khỏi tồn kho? (để nhân viên cập nhật lại)`)) return
     await supabase.from('ton_kho').delete().eq('id', item.id)
     taiTonKho()
@@ -234,7 +235,7 @@ export default function Dashboard() {
               <thead>
                 <tr>
                   <th>Tên sản phẩm</th><th>Nhóm</th><th>SL</th><th>Người cập nhật</th><th>Thời gian</th>
-                  {isAdmin && <th></th>}
+                  {coTheSua && <th></th>}
                 </tr>
               </thead>
               <tbody>
@@ -243,7 +244,7 @@ export default function Dashboard() {
                     <td>{item.ten_sp}</td>
                     <td><span className={`tag ${item.nhom_hang}`}>{NHOM_HANG[item.nhom_hang]}</span></td>
                     <td>
-                      {isAdmin ? (
+                      {coTheSua ? (
                         <input type="number" defaultValue={item.so_luong} style={{ width: 70 }}
                           onBlur={e => {
                             const v = parseInt(e.target.value)
@@ -253,7 +254,7 @@ export default function Dashboard() {
                     </td>
                     <td>{item.ho_ten || item.ma_nv || '—'}</td>
                     <td className="muted">{new Date(item.updated_at).toLocaleString('vi-VN')}</td>
-                    {isAdmin && (
+                    {coTheSua && (
                       <td><button className="sm danger" onClick={() => xoa(item)}>Xóa</button></td>
                     )}
                   </tr>
