@@ -1,92 +1,119 @@
-# MIA.VN — Hệ thống kiểm kê tồn kho
+# Wiki Kho Vận — Mia.vn
 
-Web app kiểm kê tồn kho: **Supabase → GitHub → Vercel**.
-Nhân viên quét QR chung → đăng nhập bằng Mã NV + mật khẩu riêng → kiểm kê theo từng nhóm hàng (Vali / Balo / Phụ kiện / Quà tặng). Mọi thao tác tự ghi lịch sử (ai, làm gì, khi nào).
+Wiki nội bộ cho bộ phận kho vận. Nhân viên **quét QR xem không cần đăng nhập**; quản lý **đăng nhập sửa nội dung qua web** (không đụng code).
+
+**Stack:** Next.js 14 + Supabase (database + auth) + Vercel. Editor WYSIWYG (Tiptap) — soạn thảo như Word.
 
 ---
 
 ## Kiến trúc
 
-| Thành phần | Vai trò |
-|---|---|
-| **Supabase** | Database (Postgres) + Auth + phân quyền (RLS) |
-| **Next.js 14** | Frontend + API route quản lý nhân viên |
-| **Vercel** | Hosting |
-| **QR chung** | In dán tại kho → trỏ về `/login` |
+```
+Nhân viên  ──quét QR──►  Trang public (Next.js/Vercel)  ──đọc──►  Supabase
+Quản lý    ──đăng nhập─►  Trang /admin  ──ghi──►  Supabase  ──hiện ra──►  Trang public
+```
 
-**4 bảng:** `profiles` (nhân viên), `sessions` (phiên kiểm kê theo nhóm hàng), `inventory` (tồn kho), `audit_log` (lịch sử — ghi tự động qua trigger).
+- **Trang public** render sẵn phía server (nhanh trên điện thoại yếu), tự làm mới mỗi 30 giây.
+- **Phân quyền** bằng Row Level Security của Supabase: ai cũng đọc được, chỉ admin/editor mới ghi.
 
 ---
 
-## Bước 1 — Tạo project Supabase
+## Triển khai — 6 bước
 
-1. Vào https://supabase.com → **New project**. Đặt tên, chọn region gần (Singapore).
-2. Chờ tạo xong → vào **SQL Editor** → dán toàn bộ `supabase/schema.sql` → **Run**.
-3. Vào **Project Settings → API**, copy 3 giá trị:
-   - Project URL
-   - `anon` `public` key
-   - `service_role` key (⚠️ bí mật)
+### Bước 1 — Tạo project Supabase & chạy schema
 
-## Bước 2 — Tạo tài khoản admin đầu tiên
+1. Vào [supabase.com](https://supabase.com) → **New project** (đặt tên, chọn region gần: Singapore).
+2. Đợi project khởi tạo xong (~2 phút).
+3. Vào **SQL Editor** → **New query** → mở file `supabase/schema.sql` trong repo này, dán toàn bộ vào → bấm **Run**.
+   - Lệnh này tạo 2 bảng (`pages`, `profiles`), bật bảo mật RLS, và tạo sẵn 6 mục gốc + 4 SOP con.
 
-Trong Supabase → **Authentication → Users → Add user**:
-- Email: `admin@mia.local`
-- Password: (đặt mật khẩu)
-- ✅ Auto Confirm User
+### Bước 2 — Lấy khóa kết nối
 
-Sau đó vào **SQL Editor** chạy để nâng quyền admin + đặt mã NV:
-```sql
-update public.profiles
-set ma_nv = 'admin', ho_ten = 'Cao Vĩnh Phúc', vai_tro = 'admin'
-where id = (select id from auth.users where email = 'admin@mia.local');
-```
-> Từ giờ đăng nhập bằng **Mã NV = admin** + mật khẩu vừa đặt. Các nhân viên khác tạo trong trang Quản trị.
+1. Vào **Project Settings** (bánh răng) → **API**.
+2. Copy 2 giá trị: **Project URL** và **anon public key**.
 
-## Bước 3 — Chạy thử ở máy (tùy chọn)
+### Bước 3 — Tạo tài khoản quản lý
 
-```bash
-cd mia-inventory
-cp .env.example .env.local   # điền 3 key từ Bước 1
-nvm use 24                   # Node v24.15.0
-npm install
-npm run dev                  # http://localhost:3000
-```
+1. Vào **Authentication** → **Users** → **Add user** → **Create new user**.
+2. Nhập email + mật khẩu cho từng quản lý/tổ trưởng (3–5 người). Bật **Auto Confirm**.
+3. Cấp quyền admin: vào **SQL Editor**, chạy (thay email):
+   ```sql
+   update public.profiles set role = 'admin'
+   where id = (select id from auth.users where email = 'ban@mia.vn');
+   ```
+   (Với các editor khác, đổi `'admin'` thành `'editor'` cũng được — cả hai đều sửa được nội dung.)
 
-## Bước 4 — Push GitHub
+### Bước 4 — Đẩy code lên GitHub
+
+Trong thư mục project (Terminal / VS Code):
 
 ```bash
 git init
 git add .
-git commit -m "MIA inventory system"
+git commit -m "Wiki kho van Mia.vn - init"
 git branch -M main
-git remote add origin https://github.com/caovinhphuc/mia-inventory.git
+git remote add origin https://github.com/TEN_BAN/wiki-kho-mia.git
 git push -u origin main
 ```
 
-## Bước 5 — Deploy Vercel
+(Tạo repo trống trên GitHub trước, rồi thay `TEN_BAN` bằng username của bạn.)
 
-1. https://vercel.com → **Add New → Project** → import repo `mia-inventory`.
-2. **Environment Variables** — thêm 3 biến (từ Bước 1):
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-3. **Deploy**. Xong → có URL dạng `https://mia-inventory.vercel.app`.
+### Bước 5 — Nối Vercel & cấu hình biến môi trường
 
-## Bước 6 — Cập nhật Redirect URL Supabase
+1. Vào [vercel.com](https://vercel.com) → **Add New** → **Project** → chọn repo `wiki-kho-mia`.
+2. Ở phần **Environment Variables**, thêm 2 biến (lấy từ Bước 2):
 
-Supabase → **Authentication → URL Configuration** → thêm domain Vercel vào **Site URL** + **Redirect URLs**.
+   | Name | Value |
+   |------|-------|
+   | `NEXT_PUBLIC_SUPABASE_URL` | Project URL |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon public key |
+
+3. Bấm **Deploy**. Vài phút sau có URL dạng `https://wiki-kho-mia.vercel.app`.
+
+> Mỗi lần bạn `git push`, Vercel tự deploy lại. Không cần thao tác gì thêm.
+
+### Bước 6 — Tạo QR code dán tại kho
+
+- Dùng bất kỳ công cụ tạo QR nào (ví dụ qr.io) trỏ tới URL Vercel.
+- In ra, ép plastic, dán tại các trạm: khu nhận hàng, khu lưu kho, khu xuất hàng.
+- Nhân viên quét là xem được ngay, không cần cài app, không cần đăng nhập.
 
 ---
 
-## Sử dụng
+## Chạy thử ở máy (tùy chọn)
 
-1. **Admin** đăng nhập → trang **Quản trị**: tạo nhân viên (Mã NV + mật khẩu), in **QR đăng nhập chung**.
-2. Dán QR tại kho. Nhân viên quét → nhập Mã NV + mật khẩu.
-3. Vào **Kiểm kê** → tạo phiên theo nhóm hàng → thêm SP / nhập số lượng.
-4. **Lịch sử**: xem ai nhập/sửa/xóa gì, ngày giờ nào — lọc theo phiên hoặc nhân viên.
+```bash
+npm install
+cp .env.local.example .env.local   # rồi điền URL + key vào
+npm run dev                        # mở http://localhost:3000
+```
 
-## Bảo mật
+---
 
-- `service_role` key chỉ dùng trong API route server-side, không bao giờ lộ ra client.
-- RLS bật trên mọi bảng: chỉ user đăng nhập mới đọc/ghi được; chỉ admin quản lý nhân viên.
-- `audit_log` ghi qua trigger → nhân viên không sửa/xóa lịch sử được.
+## Sửa nội dung hằng ngày (cho quản lý)
+
+1. Vào `https://[url-cua-ban]/admin` → đăng nhập.
+2. Chọn mục cần sửa → bấm **Sửa**.
+3. Soạn thảo bằng thanh công cụ (đậm, tiêu đề, danh sách...) → bấm **Lưu**.
+4. Nội dung mới hiện trên trang public trong vòng 30 giây.
+
+---
+
+## Cấu trúc thư mục
+
+```
+supabase/schema.sql        Schema database — chạy 1 lần trong Supabase
+src/app/wiki/[slug]/       Trang public (đọc, render HTML)
+src/app/admin/             Đăng nhập + dashboard + editor
+src/components/            WikiShell (điều hướng), Editor (Tiptap)
+src/lib/                   Supabase client + helper dựng cây menu
+```
+
+## Thêm/bớt trang wiki
+
+Trang được tạo trong database, không phải trong code. Hiện editor cho sửa nội dung 10 trang có sẵn. Muốn thêm trang mới, chèn vào bảng `pages` trong Supabase (SQL Editor):
+
+```sql
+insert into public.pages (slug, title, parent_slug, sort_order, content)
+values ('sop-dong-goi', 'Đóng gói', 'sop', 4, '<p>...</p>');
+```
