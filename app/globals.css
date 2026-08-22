@@ -134,7 +134,7 @@ tr:hover td { background: #fafbfc; }
   }
   .bottom-link.active { color: var(--brand); }
   .bottom-icon { font-size: 22px; }
-  .bottom-label { font-weight: 600; }
+  .bottom-label { font-weight: 600; font-size: 11px; white-space: nowrap; }
   /* Card gọn hơn trên mobile */
   .card { padding: 14px; }
   h1 { font-size: 18px; }

@@ -3,12 +3,12 @@ import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useState } from 'react'
 
-type NavItem = { href: string; label: string; icon: string }
+type NavItem = { href: string; label: string; short: string; icon: string }
 
 const NAV: NavItem[] = [
-  { href: '/dashboard', label: 'Cập nhật tồn kho', icon: '📝' },
-  { href: '/tra-cuu', label: 'Tra cứu sản phẩm', icon: '🔍' },
-  { href: '/history', label: 'Lịch sử', icon: '🕑' },
+  { href: '/dashboard', label: 'Cập nhật tồn kho', short: 'Cập nhật', icon: '📝' },
+  { href: '/tra-cuu', label: 'Tra cứu sản phẩm', short: 'Tra cứu', icon: '🔍' },
+  { href: '/history', label: 'Lịch sử', short: 'Lịch sử', icon: '🕑' },
 ]
 
 export default function Shell({
@@ -24,7 +24,7 @@ export default function Shell({
   }
 
   const nav = [...NAV]
-  if (isAdmin) nav.push({ href: '/admin', label: 'Quản trị', icon: '⚙️' })
+  if (isAdmin) nav.push({ href: '/admin', label: 'Quản trị', short: 'Quản trị', icon: '⚙️' })
 
   return (
     <div className="shell">
@@ -64,7 +64,7 @@ export default function Shell({
           <a key={item.href} href={item.href}
             className={`bottom-link ${pathname === item.href ? 'active' : ''}`}>
             <span className="bottom-icon">{item.icon}</span>
-            <span className="bottom-label">{item.label.split(' ')[0]}</span>
+            <span className="bottom-label">{item.short}</span>
           </a>
         ))}
       </nav>
