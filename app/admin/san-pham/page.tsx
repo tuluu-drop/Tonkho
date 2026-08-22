@@ -49,12 +49,28 @@ export default function QuanLySanPham() {
 
   async function themSP() {
     setMsg('')
-    if (!tenMoi.trim()) return
-    const { error } = await supabase.from('san_pham')
-      .insert({ ten_sp: tenMoi.trim(), nhom_hang: nhomMoi })
-    if (error) { setMsg('Lỗi: ' + (error.message.includes('duplicate') ? 'Tên SP đã tồn tại' : error.message)); return }
-    setTenMoi(''); setMsg('✓ Đã thêm sản phẩm')
-    taiDanhSach(q, fNhom)
+    // Tách nhiều dòng, mỗi dòng 1 tên SP, bỏ dòng trống + trùng lặp
+    const ten = tenMoi.split('\n').map(t => t.trim()).filter(Boolean)
+    const unique = Array.from(new Set(ten))
+    if (unique.length === 0) return
+    const rows = unique.map(t => ({ ten_sp: t, nhom_hang: nhomMoi }))
+    const { data, error } = await supabase.from('san_pham')
+      .insert(rows).select()
+    if (error) {
+      // Vẫn có thể thêm được phần không trùng nhờ ... nhưng insert lô fail toàn bộ nếu 1 cái trùng
+      // -> chuyển sang thêm từng cái, bỏ qua trùng
+      let ok = 0, trung = 0
+      for (const r of rows) {
+        const { error: e2 } = await supabase.from('san_pham').insert(r)
+        if (e2) { if (e2.message.includes('duplicate')) trung++; }
+        else ok++
+      }
+      setTenMoi(''); taiDanhSach(q, fNhom)
+      setMsg(`✓ Đã thêm ${ok} SP mới${trung ? `, bỏ qua ${trung} SP đã tồn tại` : ''}.`)
+      return
+    }
+    setTenMoi(''); taiDanhSach(q, fNhom)
+    setMsg(`✓ Đã thêm ${data?.length || rows.length} sản phẩm mới.`)
   }
 
   async function xoaSP(sp: SanPham) {
@@ -82,21 +98,27 @@ export default function QuanLySanPham() {
 
         <div className="card">
           <h2>Thêm sản phẩm mới</h2>
-          <div className="row">
+          <p className="muted" style={{ marginBottom: 12 }}>Nhập <b>mỗi dòng một tên sản phẩm</b> (có thể dán nhiều dòng từ Excel), chọn nhóm hàng chung rồi bấm Thêm.</p>
+          <div className="row" style={{ alignItems: 'flex-start' }}>
             <div style={{ flex: 2 }}>
-              <label>Tên sản phẩm</label>
-              <input value={tenMoi} onChange={e => setTenMoi(e.target.value)}
-                placeholder="Nhập tên sản phẩm" onKeyDown={e => e.key === 'Enter' && themSP()} />
+              <label>Tên sản phẩm (mỗi dòng 1 SP)</label>
+              <textarea value={tenMoi} onChange={e => setTenMoi(e.target.value)}
+                rows={6} placeholder={"VD:\nSamsonite Vali A 20\nHerschel Balo B\nAnse Túi C"}
+                style={{ resize: 'vertical', fontFamily: 'inherit' }} />
             </div>
             <div style={{ flex: '0 0 160px' }}>
               <label>Nhóm hàng</label>
               <select value={nhomMoi} onChange={e => setNhomMoi(e.target.value)}>
                 {Object.entries(NHOM_HANG).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
-            </div>
-            <div style={{ flex: '0 0 auto' }}>
-              <label>&nbsp;</label>
-              <button onClick={themSP} disabled={!tenMoi.trim()}>+ Thêm</button>
+              <div style={{ marginTop: 12 }}>
+                <button onClick={themSP} disabled={!tenMoi.trim()} style={{ width: '100%' }}>+ Thêm tất cả</button>
+              </div>
+              {tenMoi.trim() && (
+                <div className="muted" style={{ fontSize: 12, marginTop: 6, textAlign: 'center' }}>
+                  {tenMoi.split('\n').map(t => t.trim()).filter(Boolean).length} dòng
+                </div>
+              )}
             </div>
           </div>
           {msg && <div className={msg.startsWith('✓') ? 'muted' : 'err'} style={{ marginTop: 8 }}>{msg}</div>}
