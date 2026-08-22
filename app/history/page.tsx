@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, NHOM_HANG } from '@/lib/supabase'
-import TopBar from '@/components/TopBar'
+import Shell from '@/components/Shell'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,9 +46,7 @@ export default function History() {
     (!q || l.ten_sp.toLowerCase().includes(q.toLowerCase())))
 
   return (
-    <>
-      <TopBar hoTen={profile?.ho_ten || ''} isAdmin={profile?.vai_tro === 'admin'} />
-      <div className="wrap">
+    <Shell hoTen={profile?.ho_ten || ''} isAdmin={profile?.vai_tro === 'admin'}>
         <div className="card">
           <h1>Lịch sử cập nhật</h1>
           <p className="muted">Toàn bộ thao tác — ai cập nhật sản phẩm nào, số lượng bao nhiêu, lúc nào.</p>
@@ -90,7 +88,6 @@ export default function History() {
           </table>
           {filtered.length === 0 && <p className="muted">Chưa có lịch sử.</p>}
         </div>
-      </div>
-    </>
+    </Shell>
   )
 }
