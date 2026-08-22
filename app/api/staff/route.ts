@@ -10,22 +10,31 @@ function adminClient() {
   )
 }
 
-// Xác thực người gọi phải là admin
-async function requireAdmin(req: NextRequest) {
+// Xác thực người gọi phải là admin — trả về {admin} hoặc {error, status}
+async function requireAdmin(req: NextRequest): Promise<
+  { admin: ReturnType<typeof adminClient>; error?: never } |
+  { admin?: never; error: string; status: number }
+> {
+  // Kiểm tra biến môi trường server
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { error: 'Server thiếu SUPABASE_SERVICE_ROLE_KEY. Kiểm tra Environment Variables trên Vercel.', status: 500 }
+  }
   const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  if (!token) return null
+  if (!token) return { error: 'Thiếu token đăng nhập.', status: 401 }
   const admin = adminClient()
-  const { data: { user } } = await admin.auth.getUser(token)
-  if (!user) return null
+  const { data: { user }, error: uErr } = await admin.auth.getUser(token)
+  if (uErr || !user) return { error: 'Token không hợp lệ hoặc service key sai. Kiểm tra lại key trên Vercel.', status: 401 }
   const { data: prof } = await admin.from('profiles')
     .select('vai_tro').eq('id', user.id).single()
-  return prof?.vai_tro === 'admin' ? admin : null
+  if (prof?.vai_tro !== 'admin') return { error: 'Tài khoản của bạn không phải admin.', status: 403 }
+  return { admin }
 }
 
 // GET: danh sách nhân viên
 export async function GET(req: NextRequest) {
-  const admin = await requireAdmin(req)
-  if (!admin) return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
+  const auth = await requireAdmin(req)
+  if (!auth.admin) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const admin = auth.admin
   const { data } = await admin.from('profiles')
     .select('id,ma_nv,ho_ten,vai_tro,created_at').order('created_at')
   return NextResponse.json({ data })
@@ -33,8 +42,9 @@ export async function GET(req: NextRequest) {
 
 // POST: tạo nhân viên mới
 export async function POST(req: NextRequest) {
-  const admin = await requireAdmin(req)
-  if (!admin) return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
+  const auth = await requireAdmin(req)
+  if (!auth.admin) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const admin = auth.admin
   const { ma_nv, ho_ten, mat_khau, vai_tro } = await req.json()
   if (!ma_nv || !ho_ten || !mat_khau)
     return NextResponse.json({ error: 'Thiếu thông tin' }, { status: 400 })
@@ -54,8 +64,9 @@ export async function POST(req: NextRequest) {
 
 // DELETE: xóa nhân viên
 export async function DELETE(req: NextRequest) {
-  const admin = await requireAdmin(req)
-  if (!admin) return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
+  const auth = await requireAdmin(req)
+  if (!auth.admin) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const admin = auth.admin
   const { id } = await req.json()
   const { error } = await admin.auth.admin.deleteUser(id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
@@ -64,8 +75,9 @@ export async function DELETE(req: NextRequest) {
 
 // PATCH: reset mật khẩu
 export async function PATCH(req: NextRequest) {
-  const admin = await requireAdmin(req)
-  if (!admin) return NextResponse.json({ error: 'Không có quyền' }, { status: 403 })
+  const auth = await requireAdmin(req)
+  if (!auth.admin) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const admin = auth.admin
   const { id, mat_khau } = await req.json()
   const { error } = await admin.auth.admin.updateUserById(id, { password: mat_khau })
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
